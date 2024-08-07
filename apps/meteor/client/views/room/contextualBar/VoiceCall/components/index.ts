@@ -6,3 +6,4 @@ export { default as Timer } from './Timer';
 export { default as DialPad } from './DialPad';
 export { default as CallContactID } from './CallContactID';
 export { default as Status } from './Status';
+export { default as SettingsButton } from './CallSettingsButton';
