@@ -41,7 +41,7 @@ const UserPageHeaderContentWithSeatsCap = ({ activeUsers, maxActiveUsers }: User
 			</Margins>
 			<ButtonGroup>
 				{canRegisterExtension && (
-					<Button primary onClick={(): void => setModal(<AssignExtensionModal closeModal={(): void => setModal()} />)}>
+					<Button primary onClick={(): void => setModal(<AssignExtensionModal closeModal={(): void => setModal(null)} />)}>
 						{t('Associate_Extension')}
 					</Button>
 				)}

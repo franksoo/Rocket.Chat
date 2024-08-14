@@ -1,53 +1,84 @@
 import { Button, Modal, Select, Field, FieldGroup, FieldLabel, FieldRow, Box } from '@rocket.chat/fuselage';
-import { useMutableCallback } from '@rocket.chat/fuselage-hooks';
-import { useToastMessageDispatch, useEndpoint, useTranslation, useUser } from '@rocket.chat/ui-contexts';
-import { useQueryClient } from '@tanstack/react-query';
-import type { FC } from 'react';
-import React, { useState, useMemo } from 'react';
+import { useUniqueId } from '@rocket.chat/fuselage-hooks';
+import { useToastMessageDispatch, useEndpoint, useUser } from '@rocket.chat/ui-contexts';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useMemo } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 
 import UserAutoComplete from '../../../../components/UserAutoComplete/UserAutoComplete';
-import { AsyncStatePhase } from '../../../../hooks/useAsyncState';
-import { useEndpointData } from '../../../../hooks/useEndpointData';
 
-type AssignExtensionModalParams = {
+type AssignExtensionModalProps = {
 	closeModal: () => void;
-	existingExtension?: string;
-	existingUser?: string;
+	defaultExtension?: string;
+	defaultUsername?: string;
 };
 
-const AssignExtensionModal: FC<AssignExtensionModalParams> = ({ existingExtension, existingUser, closeModal }) => {
-	const t = useTranslation();
+type FormValue = {
+	username: string;
+	extension: string;
+};
+
+const AssignExtensionModal = ({ defaultExtension, defaultUsername, closeModal }: AssignExtensionModalProps) => {
+	const { t } = useTranslation();
 	const dispatchToastMessage = useToastMessageDispatch();
-	const loggedUser = useUser();
-	const [user, setUser] = useState(existingUser || '');
-	const [extension, setExtension] = useState(existingExtension || '');
-	const query = useMemo(() => ({ type: 'available' as const, username: user }), [user]);
 	const queryClient = useQueryClient();
+
+	const loggedUser = useUser();
+
 	const assignUser = useEndpoint('POST', '/v1/voip-freeswitch.extension.assign');
+	const getAvailableExtensions = useEndpoint('GET', '/v1/voip-freeswitch.extension.list');
 
-	const handleAssignment = useMutableCallback(async (e) => {
-		e.preventDefault();
-		try {
-			await assignUser({ username: user, extension });
+	const usersWithoutExtensionsId = useUniqueId();
+	const freeExtensionNumberId = useUniqueId();
 
-			queryClient.invalidateQueries(['users.list']);
-
-			if (loggedUser?.username === user) {
-				queryClient.invalidateQueries(['voice-call-client']);
-			}
-		} catch (error) {
-			dispatchToastMessage({ type: 'error', message: error });
-		}
-
-		closeModal();
+	const {
+		control,
+		handleSubmit,
+		formState: { isSubmitting },
+	} = useForm<FormValue>({
+		defaultValues: {
+			username: defaultUsername,
+			extension: defaultExtension,
+		},
 	});
 
-	const handleUserChange = useMutableCallback((e) => setUser(e));
+	const selectedUsername = useWatch({ control, name: 'username' });
+	const selectedExtension = useWatch({ control, name: 'extension' });
 
-	const { value: availableExtensions, phase: state } = useEndpointData('/v1/voip-freeswitch.extension.list', { params: query });
+	const { data: availableExtensions = [], isLoading } = useQuery(
+		['/v1/voip-freeswitch.extension.list', selectedUsername],
+		() => getAvailableExtensions({ type: 'available' as const, username: selectedUsername }),
+		{
+			select: (data) => data.extensions || [],
+			enabled: !!selectedUsername,
+		},
+	);
+
+	const extensionOptions = useMemo<[string, string][]>(
+		() => availableExtensions.map(({ extension }) => [extension, extension]),
+		[availableExtensions],
+	);
+
+	const handleAssignment = useMutation({
+		mutationFn: async ({ username, extension }: FormValue) => {
+			await assignUser({ username, extension });
+
+			queryClient.invalidateQueries(['users.list']);
+			if (loggedUser?.username === username) {
+				queryClient.invalidateQueries(['voice-call-client']);
+			}
+
+			closeModal();
+		},
+		onError: (error) => {
+			dispatchToastMessage({ type: 'error', message: error });
+			closeModal();
+		},
+	});
 
 	return (
-		<Modal wrapperFunction={(props) => <Box is='form' onSubmit={handleAssignment} {...props} />}>
+		<Modal wrapperFunction={(props) => <Box is='form' onSubmit={handleSubmit((data) => handleAssignment.mutateAsync(data))} {...props} />}>
 			<Modal.Header>
 				<Modal.Title>{t('Associate_User_to_Extension')}</Modal.Title>
 				<Modal.Close onClick={closeModal} />
@@ -55,30 +86,45 @@ const AssignExtensionModal: FC<AssignExtensionModalParams> = ({ existingExtensio
 			<Modal.Content>
 				<FieldGroup>
 					<Field>
-						<FieldLabel>{t('User_Without_Extensions')}</FieldLabel>
+						<FieldLabel htmlFor={usersWithoutExtensionsId}>{t('User_Without_Extensions')}</FieldLabel>
 						<FieldRow>
-							<UserAutoComplete
-								value={user}
-								onChange={handleUserChange}
-								conditions={{
-									$or: [
-										{ freeSwitchExtension: { $exists: true, $eq: extension } },
-										{ freeSwitchExtension: { $exists: false } },
-										{ username: { $exists: true, $eq: user } },
-									],
-								}}
+							<Controller
+								control={control}
+								name='username'
+								render={({ field }) => (
+									<UserAutoComplete
+										id={usersWithoutExtensionsId}
+										value={field.value}
+										onChange={field.onChange}
+										conditions={{
+											$or: [
+												{ freeSwitchExtension: { $exists: true, $eq: selectedExtension } },
+												{ freeSwitchExtension: { $exists: false } },
+												{ username: { $exists: true, $eq: selectedUsername } },
+											],
+										}}
+									/>
+								)}
 							/>
 						</FieldRow>
 					</Field>
+
 					<Field>
-						<FieldLabel>{t('Free_Extension_Numbers')}</FieldLabel>
+						<FieldLabel htmlFor={freeExtensionNumberId}>{t('Free_Extension_Numbers')}</FieldLabel>
 						<FieldRow>
-							<Select
-								disabled={state === AsyncStatePhase.LOADING || user === ''}
-								options={availableExtensions?.extensions?.map(({ extension }) => [extension, extension]) || []}
-								value={extension}
-								placeholder={t('Select_an_option')}
-								onChange={(value) => setExtension(String(value))}
+							<Controller
+								control={control}
+								name='extension'
+								render={({ field }) => (
+									<Select
+										id={freeExtensionNumberId}
+										disabled={isLoading || !selectedUsername}
+										options={extensionOptions}
+										placeholder={t('Select_an_option')}
+										value={field.value}
+										onChange={field.onChange}
+									/>
+								)}
 							/>
 						</FieldRow>
 					</Field>
@@ -87,7 +133,7 @@ const AssignExtensionModal: FC<AssignExtensionModalParams> = ({ existingExtensio
 			<Modal.Footer>
 				<Modal.FooterControllers>
 					<Button onClick={closeModal}>{t('Cancel')}</Button>
-					<Button primary disabled={!user || !extension} type='submit'>
+					<Button primary disabled={!selectedUsername || !selectedExtension} loading={isSubmitting} type='submit'>
 						{t('Associate')}
 					</Button>
 				</Modal.FooterControllers>
