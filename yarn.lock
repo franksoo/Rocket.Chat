@@ -8912,6 +8912,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@rocket.chat/icons@npm:^0.38.0":
+  version: 0.38.0
+  resolution: "@rocket.chat/icons@npm:0.38.0"
+  checksum: 844d76d25bb64633a40e5e2b498dca0acc4b85be87ef8e5b9921c537772fee16a8fb2a9178ac01928d699a4bc5a9856f6c7488a03d59db14aade5379bd529c1b
+  languageName: node
+  linkType: hard
+
 "@rocket.chat/instance-status@workspace:^, @rocket.chat/instance-status@workspace:packages/instance-status":
   version: 0.0.0-use.local
   resolution: "@rocket.chat/instance-status@workspace:packages/instance-status"
@@ -9200,7 +9207,7 @@ __metadata:
     "@rocket.chat/fuselage-ui-kit": "workspace:^"
     "@rocket.chat/gazzodown": "workspace:^"
     "@rocket.chat/i18n": "workspace:^"
-    "@rocket.chat/icons": ^0.35.0
+    "@rocket.chat/icons": ^0.38.0
     "@rocket.chat/instance-status": "workspace:^"
     "@rocket.chat/jwt": "workspace:^"
     "@rocket.chat/layout": ~0.31.26
