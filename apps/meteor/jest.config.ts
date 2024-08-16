@@ -24,6 +24,8 @@ const config: Config = {
 				'^@tanstack/(.+)': '<rootDir>/node_modules/@tanstack/$1',
 				'^meteor/(.*)': '<rootDir>/.meteorMocks/index.ts',
 			},
+
+			setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 		},
 		{
 			displayName: 'server',
